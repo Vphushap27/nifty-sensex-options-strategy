@@ -1,0 +1,32 @@
+name: Run NIFTY Strategy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  run-strategy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pandas
+        run: pip install pandas
+
+      - name: Run strategy
+        run: python strategy.py
+
+      - name: Upload signals
+        uses: actions/upload-artifact@v4
+        with:
+          name: nifty-signals
+          path: signals.csv
