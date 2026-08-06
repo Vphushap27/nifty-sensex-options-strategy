@@ -1,63 +1,52 @@
 import pandas as pd
 
+# CSV file
+FILE = "NIFTY 50-06-08-2025-to-06-08-2026.csv"
 
-def trading_signal(df):
-    """
-    Nifty/Sensex CE/PE signal strategy
+# Load data
+df = pd.read_csv(FILE)
 
-    Required columns:
-    Open, High, Low, Close, Volume
-    """
+# Remove spaces from column names
+df.columns = df.columns.str.strip()
 
-    df = df.copy()
+# Convert Date
+df["Date"] = pd.to_datetime(df["Date"])
 
-    # 20 EMA
-    df["EMA20"] = df["Close"].ewm(span=20, adjust=False).mean()
+# Sort oldest to newest
+df = df.sort_values("Date").reset_index(drop=True)
 
-    # VWAP
-    typical_price = (df["High"] + df["Low"] + df["Close"]) / 3
-    df["VWAP"] = (
-        (typical_price * df["Volume"]).cumsum()
-        / df["Volume"].cumsum()
-    )
+# Moving averages
+df["EMA9"] = df["Close"].ewm(span=9, adjust=False).mean()
+df["EMA21"] = df["Close"].ewm(span=21, adjust=False).mean()
 
-    # RSI 14
-    delta = df["Close"].diff()
-    gain = delta.clip(lower=0)
-    loss = -delta.clip(upper=0)
+# Signals
+df["Signal"] = ""
 
-    avg_gain = gain.rolling(14).mean()
-    avg_loss = loss.rolling(14).mean()
+for i in range(1, len(df)):
 
-    rs = avg_gain / avg_loss
-    df["RSI"] = 100 - (100 / (1 + rs))
+    # Bullish = CE
+    if df.loc[i, "EMA9"] > df.loc[i, "EMA21"] and \
+       df.loc[i-1, "EMA9"] <= df.loc[i-1, "EMA21"]:
 
-    # Previous candle levels
-    df["Previous_High"] = df["High"].shift(1)
-    df["Previous_Low"] = df["Low"].shift(1)
+        df.loc[i, "Signal"] = "BUY CE"
 
-    # CE condition
-    ce_condition = (
-        (df["Close"] > df["VWAP"]) &
-        (df["Close"] > df["EMA20"]) &
-        (df["Close"] > df["Previous_High"]) &
-        (df["RSI"] > 55)
-    )
+    # Bearish = PE
+    elif df.loc[i, "EMA9"] < df.loc[i, "EMA21"] and \
+         df.loc[i-1, "EMA9"] >= df.loc[i-1, "EMA21"]:
 
-    # PE condition
-    pe_condition = (
-        (df["Close"] < df["VWAP"]) &
-        (df["Close"] < df["EMA20"]) &
-        (df["Close"] < df["Previous_Low"]) &
-        (df["RSI"] < 45)
-    )
+        df.loc[i, "Signal"] = "BUY PE"
 
-    df["Signal"] = "NO TRADE"
-    df.loc[ce_condition, "Signal"] = "CE BUY"
-    df.loc[pe_condition, "Signal"] = "PE BUY"
+# Show signals
+signals = df[df["Signal"] != ""]
 
-    return df
+print("\n===== NIFTY SIGNALS =====\n")
+print(
+    signals[
+        ["Date", "Close", "EMA9", "EMA21", "Signal"]
+    ].to_string(index=False)
+)
 
+# Save results
+signals.to_csv("signals.csv", index=False)
 
-if __name__ == "__main__":
-    print("Nifty/Sensex CE-PE Strategy Loaded")
+print("\nSignals saved to signals.csv")
