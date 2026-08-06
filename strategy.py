@@ -1,52 +1,116 @@
 import pandas as pd
 
-# CSV file
-FILE = "NIFTY 50-06-08-2025-to-06-08-2026.csv"
+# ==========================================
+# NIFTY 50 TRADING SIGNAL STRATEGY
+# ==========================================
 
-# Load data
-df = pd.read_csv(FILE)
+FILE = "market_data.csv"
 
-# Remove spaces from column names
+# Load CSV
+try:
+    df = pd.read_csv(FILE)
+except FileNotFoundError:
+    print(f"ERROR: {FILE} not found.")
+    print("Make sure market_data.csv is in the same GitHub folder.")
+    raise
+
+# Clean column names
 df.columns = df.columns.str.strip()
 
-# Convert Date
-df["Date"] = pd.to_datetime(df["Date"])
+# Show columns for checking
+print("CSV Columns:")
+print(df.columns.tolist())
 
-# Sort oldest to newest
+# Convert Date
+df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+
+# Convert OHLC columns to numbers
+for col in ["Open", "High", "Low", "Close"]:
+    df[col] = pd.to_numeric(df[col], errors="coerce")
+
+# Remove invalid rows
+df = df.dropna(subset=["Date", "Close"])
+
+# Sort by date
 df = df.sort_values("Date").reset_index(drop=True)
 
-# Moving averages
-df["EMA9"] = df["Close"].ewm(span=9, adjust=False).mean()
-df["EMA21"] = df["Close"].ewm(span=21, adjust=False).mean()
+# ==========================================
+# INDICATORS
+# ==========================================
 
-# Signals
+# 9 EMA
+df["EMA9"] = df["Close"].ewm(
+    span=9,
+    adjust=False
+).mean()
+
+# 21 EMA
+df["EMA21"] = df["Close"].ewm(
+    span=21,
+    adjust=False
+).mean()
+
+# ==========================================
+# SIGNALS
+# ==========================================
+
 df["Signal"] = ""
 
 for i in range(1, len(df)):
 
-    # Bullish = CE
-    if df.loc[i, "EMA9"] > df.loc[i, "EMA21"] and \
-       df.loc[i-1, "EMA9"] <= df.loc[i-1, "EMA21"]:
-
+    # BUY CE
+    if (
+        df.loc[i, "EMA9"] > df.loc[i, "EMA21"]
+        and
+        df.loc[i - 1, "EMA9"] <= df.loc[i - 1, "EMA21"]
+    ):
         df.loc[i, "Signal"] = "BUY CE"
 
-    # Bearish = PE
-    elif df.loc[i, "EMA9"] < df.loc[i, "EMA21"] and \
-         df.loc[i-1, "EMA9"] >= df.loc[i-1, "EMA21"]:
-
+    # BUY PE
+    elif (
+        df.loc[i, "EMA9"] < df.loc[i, "EMA21"]
+        and
+        df.loc[i - 1, "EMA9"] >= df.loc[i - 1, "EMA21"]
+    ):
         df.loc[i, "Signal"] = "BUY PE"
 
-# Show signals
-signals = df[df["Signal"] != ""]
+# ==========================================
+# DISPLAY SIGNALS
+# ==========================================
 
-print("\n===== NIFTY SIGNALS =====\n")
-print(
-    signals[
-        ["Date", "Close", "EMA9", "EMA21", "Signal"]
-    ].to_string(index=False)
+signals = df[df["Signal"] != ""].copy()
+
+print("\n================================")
+print("       NIFTY 50 SIGNALS")
+print("================================\n")
+
+if signals.empty:
+    print("No trading signals found.")
+else:
+    print(
+        signals[
+            [
+                "Date",
+                "Open",
+                "High",
+                "Low",
+                "Close",
+                "EMA9",
+                "EMA21",
+                "Signal"
+            ]
+        ].to_string(index=False)
+    )
+
+# ==========================================
+# SAVE SIGNALS
+# ==========================================
+
+signals.to_csv(
+    "signals.csv",
+    index=False
 )
 
-# Save results
-signals.to_csv("signals.csv", index=False)
-
-print("\nSignals saved to signals.csv")
+print("\n================================")
+print("Signals saved to signals.csv")
+print("================================")
